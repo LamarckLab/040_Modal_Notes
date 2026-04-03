@@ -11,12 +11,12 @@ Modal 是一个无服务器云计算平台，允许用 Python 定义远程函数
 <img src="images/pic1.png" alt="pic1" width="900">
 
 ```text
-通过 modal run xxx.py 来提交任务
+通过在终端运行 modal run xxx.py 来提交任务
 ```
 
 ### 003 -- Modal 的 App 类
 ```text
-App 实例是Modal的"顶层组织单元"，用于注册、组织远程函数及其依赖资源，并作为任务提交到云端执行的入口
+App 实例是 Modal 的"顶层组织单元"，用于注册、组织远程函数及其依赖资源，并作为任务提交到云端执行的入口
 ```
 
 ### 004 -- Modal 的 image 容器
@@ -98,8 +98,8 @@ image = (
 ```
 #### [直接使用已有镜像，比如从DockerFile导入](https://modal.com/docs/guide/existing-images)
 
-### 011 -- 在 image 中添加Python 包
-> **可以通过将所需的所有包传给 Image.uv_pip_install 方法，将 Python 包添加到环境中**
+### 011 -- 在 image 中添加 Python 包
+> **可以通过将所需的所有包传给 image.uv_pip_install 方法，将 Python 包添加到环境中**
 ```python
 datascience_image = (
     modal.Image.debian_slim()
@@ -113,4 +113,7 @@ def my_function():
     df = pd.DataFrame()
     ...
 ```
+> **建议严格固定依赖版本，比如"pandas==2.2.0"、"torch<3"，以提高构建的可复现性**
+
+> **如果在使用 image.uv_pip_install 时遇到问题，你可以回退使用 image.pip_install，它使用标准的 pip**
 
