@@ -195,26 +195,50 @@ image_with_repo = (
 ### 017 -- 构建 image 时提前运行一段 Python 代码
 > 此处举一个例子：把 Hugging Face 上的模型下载到容器缓存里
 
-```python
-import os
+> 本质上，这相当于运行一个 Modal Function，并将执行后的文件系统状态快照为一个新的 image
 
-def download_models() -> None:
+```python
+import os # 导入 Python 标准库，后续用于读取环境变量
+
+def download_models() -> None: # 不接收参数，返回值为 None
     import diffusers
 
-    model_name = "segmind/small-sd"
+    model_name = "segmind/small-sd" # 指定要下载的 Hugging Face 模型名
     pipe = diffusers.StableDiffusionPipeline.from_pretrained(
-        model_name, use_auth_token=os.environ["HF_TOKEN"]
+        model_name, use_auth_token=os.environ["HF_TOKEN"] # 从环境变量中拿到HF_TOKEN，将其作为 Hugging Face 的认证凭据
     )
 
-hf_cache = modal.Volume.from_name("hf-cache")
+hf_cache = modal.Volume.from_name("hf-cache") # 获取一个名为 hf-cache 的 Modal Volume，Volume 是 Modal 提供的一个持久化存储卷
 
 image = (
     modal.Image.debian_slim()
         .pip_install("diffusers[torch]", "transformers", "ftfy", "accelerate")
-        .run_function(
-            download_models,
-            secrets=[modal.Secret.from_name("huggingface-secret")],
-            volumes={"/root/.cache/huggingface": hf_cache},
+        .run_function( # 在构建这个 image 的过程中，执行下面内容
+            download_models, # 运行一次 download_models 函数
+            secrets=[modal.Secret.from_name("huggingface-secret")], # 给这个构建步骤注入一个 secret，存放敏感信息
+            volumes={"/root/.cache/huggingface": hf_cache}, # 把 hf_cache 挂载到容器内的 /root/.cache/huggingface 路径
         )
+)
+```
+
+### 018 -- 在 image 构建阶段，附加 GPU
+> 如果在构建 image 的某一步需要在带 GPU 的实例上运行（例如某些包在安装时检测 GPU 以设置编译参数），可以在定义该步骤时指定所需的 GPU 类型
+
+```python
+image = (
+    modal.Image.debian_slim()
+    .pip_install("bitsandbytes", gpu="H100")
+)
+```
+
+### 019 -- image 的缓存与重建
+> Modal 根据 image 定义决定是否重建；若未变化则直接使用缓存。image 按层缓存（每个方法调用一层），某一层变动会导致其后的层全部重建，因此应将稳定步骤放前、易变步骤放后以提升构建效率。若需强制重建，可在构建方法中设置 force_build=True。
+
+```python
+image = (
+    modal.Image.debian_slim()
+    .apt_install("git")
+    .pip_install("slack-sdk", force_build=True)
+    .run_commands("echo hi")
 )
 ```
