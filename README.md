@@ -242,3 +242,50 @@ image = (
     .run_commands("echo hi")
 )
 ```
+
+### 020 -- 使用 .from_registry 从公共镜像仓库加载镜像
+> from_registry 方法可以从所有公共镜像仓库加载镜像，例如：
+- Nvidia - nvcr.io
+- AWS - ECR
+- GitHub - ghcr.io
+
+```python
+sklearn_image = modal.Image.from_registry("huanjason/scikit-learn")
+
+@app.function(image=sklearn_image)
+def fit_knn():
+    from sklearn.neighbors import KNeighborsClassifier
+    ...
+```
+
+> 也可以像操作其他 Modal Image 一样，对这个镜像进行进一步修改
+
+```python
+data_science_image = sklearn_image.uv_pip_install("polars", "datasette")
+```
+
+### 021 -- 使用 .from_dockerfile 自定义镜像
+> 可以通过将 Dockerfile 的路径传递给 Image.from_dockerfile，从已有的 Dockerfile 定义一个 Image
+```python
+dockerfile_image = modal.Image.from_dockerfile("Dockerfile")
+
+
+@app.function(image=dockerfile_image)
+def fit():
+    import sklearn
+    ...
+```
+
+### 022 -- 配置 CPU、内存和硬盘
+每个 Modal Function 或 Sandbox 容器默认请求 0.125 个 CPU 核心 和 128 MiB 内存，如果 worker 节点有可用的 CPU 或内存，容器可以超过这个最小值运行，但更好的做法是通过请求更大的资源值来保证获得更多资源
+> 如果代码需要运行在更多 CPU 核心上，可以通过 cpu 参数进行指定
+```python
+import modal
+
+app = modal.App()
+
+@app.function(cpu=8.0)
+def my_function():
+    # 这里的代码将至少可以使用 8.0 个 CPU 核心
+    ...
+```
