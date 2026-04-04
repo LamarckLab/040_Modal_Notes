@@ -278,7 +278,9 @@ def fit():
 
 ### 022 -- 配置 CPU、内存和硬盘
 每个 Modal Function 或 Sandbox 容器默认请求 0.125 个 CPU 核心 和 128 MiB 内存，如果 worker 节点有可用的 CPU 或内存，容器可以超过这个最小值运行，但更好的做法是通过请求更大的资源值来保证获得更多资源
-> 如果代码需要运行在更多 CPU 核心上，可以通过 cpu 参数进行指定
+
+> 如果代码需要运行在更多 CPU 核心上，可以通过 cpu 参数进行指定 (浮点数形式)
+
 ```python
 import modal
 
@@ -287,5 +289,33 @@ app = modal.App()
 @app.function(cpu=8.0)
 def my_function():
     # 这里的代码将至少可以使用 8.0 个 CPU 核心
+    ...
+```
+
+> 如果代码需要更多可保证的内存，可以通过 memory 参数来请求 (整数形式)，单位是MB
+
+```python
+import modal
+
+app = modal.App()
+
+@app.function(memory=32768)
+def my_function():
+    # 这里的代码将至少可以使用 32 GiB 的内存
+    ...
+```
+
+磁盘请求是按照 20 倍内存请求来计算
+
+CPU 默认上限 = 你请求的 CPU + 16 个物理核心 (当CPU 请求是 0.125 核，那默认软上限就是 16.125 核)
+
+> 手动显式设置 CPU 上限
+
+```python
+cpu_request = 1.0
+cpu_limit = 4.0
+
+@app.function(cpu=(cpu_request, cpu_limit))
+def f():
     ...
 ```
