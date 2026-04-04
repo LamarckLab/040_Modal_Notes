@@ -2,7 +2,7 @@
 
 ---
 
-### 001 -- Modal介绍
+### 001 -- Modal 介绍
 ```text
 Modal 是一个无服务器云计算平台，允许用 Python 定义远程函数并调用云端 GPU/CPU 资源，无需管理服务器与环境。通过 Image 声明依赖，实现代码级调度，适合 AI 与高性能计算任务。
 ```
@@ -45,7 +45,7 @@ App
  └── Entrypoint（本地入口）
 ```
 
-### 007 -- .remote( )
+### 007 -- .remote( )方法
 ```text
 .remote() 用于将函数调用并提交到云端执行
 ```
@@ -86,7 +86,7 @@ def run_on_80gb():
 #### [Modal GPU Doc](https://modal.com/docs/guide/gpu)
 
 ### 010 -- Modal image 的定义
->**在 Modal 中定义 image 的典型流程是：从一个基础镜像 (base Image) 开始，通过方法链 (method chaining) 逐步构建**
+>**在 Modal 中定义 image 的典型流程是：从一个基础镜像 (base Image) 开始，通过方法链 (method chaining) 逐步构建，可以为每一个函数单独定义不同的运行环境**
 ```python
 image = (
     modal.Image.debian_slim(python_version="3.13") # 创建一个基础镜像 (精简版 Debian Linux，Python version 3.13)
@@ -100,6 +100,8 @@ image = (
 
 ### 011 -- 在 image 中添加 Python 包
 > **可以通过将所需的所有包传给 image.uv_pip_install 方法，将 Python 包添加到环境中**
+
+> **建议严格固定依赖版本，比如"pandas==2.2.0"、"torch<3"，以提高构建的可复现性**
 ```python
 datascience_image = (
     modal.Image.debian_slim()
@@ -113,7 +115,52 @@ def my_function():
     df = pd.DataFrame()
     ...
 ```
-> **建议严格固定依赖版本，比如"pandas==2.2.0"、"torch<3"，以提高构建的可复现性**
 
 > **如果在使用 image.uv_pip_install 时遇到问题，你可以回退使用 image.pip_install，它使用标准的 pip**
 
+```python
+datascience_image = (
+    modal.Image.debian_slim(python_version="3.13")
+    .pip_install("pandas==2.2.0", "numpy")
+)
+```
+
+### 012 -- 把本地文件传递到 image 中
+> **有时容器需要一些无法从互联网获取的依赖，可以使用 image.add_local_dir 和 image.add_local_file 方法，将本地系统中的文件传递到容器中**
+>
+
+```python
+image = modal.Image.debian_slim().add_local_dir("/user/erikbern/.aws", remote_path="/root/.aws")
+```
+
+### 013 -- 导入包写在函数内部
+> **若本地未安装某包（如 pandas），不要在脚本顶部全局 import，否则会报 ImportError；应将 import 写在函数内部，使其仅在远程容器运行时加载（容器中已安装该包）**
+
+```python
+datascience_image = (
+    modal.Image.debian_slim()
+    .uv_pip_install("pandas==2.2.0", "numpy")
+)
+
+@app.function(image=datascience_image)
+def my_function():
+    import pandas as pd
+    import numpy as np
+    df = pd.DataFrame()
+    ...
+```
+
+> **如果有多个函数，且共享部分依赖，可以使用 image.imports 实现全局作用**
+
+```python
+pandas_image = modal.Image.debian_slim().pip_install("pandas", "numpy")
+
+with pandas_image.imports():
+    import pandas as pd
+    import numpy as np
+
+@app.function(image=pandas_image)
+def my_function():
+    df = pd.DataFrame()
+    ...
+```
