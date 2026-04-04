@@ -164,3 +164,57 @@ def my_function():
     df = pd.DataFrame()
     ...
 ```
+
+### 014 -- 在 image 中安装系统包
+> 使用 Image.apt_install 来安装 Linux 系统包
+
+```python
+image = modal.Image.debian_slim().apt_install("git", "curl")
+```
+
+### 015 -- 设置 image 中的环境变量
+> 向 image.env 传入一个字典，来修改代码可见的环境变量
+
+```python
+image = modal.Image.debian_slim().env({"PORT": "6443"})
+```
+
+### 016 -- 构建 image 时运行 shell 命令
+> 通过 Image.run_commands 在构建 image 时执行 shell 命令
+
+```python
+image_with_repo = (
+    modal.Image.debian_slim()
+    .apt_install("git")
+    .run_commands(
+        "git clone https://github.com/modal-labs/gpu-glossary"
+    )
+)
+```
+
+### 017 -- 构建 image 时提前运行一段 Python 代码
+> 此处举一个例子：把 Hugging Face 上的模型下载到容器缓存里
+
+```python
+import os
+
+def download_models() -> None:
+    import diffusers
+
+    model_name = "segmind/small-sd"
+    pipe = diffusers.StableDiffusionPipeline.from_pretrained(
+        model_name, use_auth_token=os.environ["HF_TOKEN"]
+    )
+
+hf_cache = modal.Volume.from_name("hf-cache")
+
+image = (
+    modal.Image.debian_slim()
+        .pip_install("diffusers[torch]", "transformers", "ftfy", "accelerate")
+        .run_function(
+            download_models,
+            secrets=[modal.Secret.from_name("huggingface-secret")],
+            volumes={"/root/.cache/huggingface": hf_cache},
+        )
+)
+```
