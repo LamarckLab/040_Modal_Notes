@@ -1,5 +1,4 @@
-#  ☁️Modal Notes
-
+#  🧠 Modal Core Notes
 ---
 
 ### 001 -- Modal 介绍
@@ -318,4 +317,20 @@ cpu_limit = 4.0
 @app.function(cpu=(cpu_request, cpu_limit))
 def f():
     ...
+```
+
+### 023 -- Modal 的计费逻辑
+
+> 一个 Function 在部署后作为一个独立单元运行，如果没有实时输入传入该 Function，则不会运行任何默认容器，即使它所属的 App 已经部署，你的账户也不会因此被收取计算资源费用。
+
+
+
+#  🛠 Modal CLI Notes
+---
+### 001 -- Volume 相关
+```bash
+modal volume list  # 列出当前账户下所有的 Modal volume
+modal volume ls <volume-name>  # 查看该 volume 内的文件
+modal volume create <volume-name>  # 创建一个新的 volume
+modal volume delete <volume-name>  # 删除某个 volume
 ```
