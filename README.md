@@ -258,7 +258,7 @@ def fit_knn():
     ...
 ```
 
-> 也可以像操作其他 Modal Image 一样，对这个镜像进行进一步修改
+> 也可以像操作其他 Modal image 一样，对这个镜像进行进一步修改
 
 ```python
 data_science_image = sklearn_image.uv_pip_install("polars", "datasette")
@@ -301,7 +301,7 @@ app = modal.App()
 
 @app.function(memory=32768)
 def my_function():
-    # 这里的代码将至少可以使用 32 GiB 的内存
+    # 这里的代码将至少可以使用 32 GB 的内存
     ...
 ```
 
