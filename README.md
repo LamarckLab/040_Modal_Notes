@@ -320,27 +320,39 @@ def f():
 ```
 
 ### 023 -- Modal 的计费逻辑
-
-> 一个 Function 在部署后作为一个独立单元运行，如果没有实时输入传入该 Function，则不会运行任何默认容器，即使它所属的 App 已经部署，你的账户也不会因此被收取计算资源费用。
+一个 Function 在部署后作为一个独立单元运行，如果没有实时输入传入该 Function，则不会运行任何默认容器，即使它所属的 App 已经部署，你的账户也不会因此被收取计算资源费用。
 
 
 
 #  🛠 Modal CLI Notes
 ---
 ### 001 -- Volume 相关
-> 列出当前账户下所有的 Modal volume
+> **列出当前账户下所有的 Modal volume**
 ```bash
 modal volume list
 ```
 
-> 列出某个 volume 内部的文件和目录，不指定 PATH 就从根目录列起
+> **列出某个 volume 内部的文件和目录，不指定 PATH 就从根目录列起**
 ```bash
-modal volume ls <volume-name>  # modal volume ls alophafold3-data
-modal volume ls <VOLUME_NAME> [PATH]  # modal volume ls alophafold3-data /databases
+modal volume ls <volume-name>
+# modal volume ls alophafold3-data
+
+modal volume ls <VOLUME_NAME> [PATH]
+# modal volume ls alophafold3-data /databases
 ```
 
-> 创建或删除一个 volume
+> **创建或删除一个 volume**
 ```bash
-modal volume create <volume-name>  # modal volume create lamarck-data
-modal volume delete <volume-name>  # modal volume delete lamarck-data
+modal volume create <volume-name>
+# modal volume create lamarck-data
+
+modal volume delete <volume-name>
+# modal volume delete lamarck-data
+```
+
+> **上传本地文件到 volume**
+```bash
+modal volume put <VOLUME_NAME> <LOCAL_PATH> <REMOTE_PATH>
+# modal volume put lamarck-data /data/lmk/hello.txt /hello.txt  # 上传到根目录
+# modal volume put lamarck-data /data/lmk/hello.txt /uploads/hello.txt  #  上传到指定文件夹下
 ```
