@@ -1,4 +1,4 @@
-#  🧠 Modal Core Notes
+#  ☁️ Modal Core Notes
 ---
 
 ### 001 -- Modal 介绍
@@ -324,7 +324,7 @@ def f():
 
 
 
-#  🛠 Modal CLI Notes
+#  ☁️ Modal CLI Notes
 ---
 ### 001 -- Volume 相关
 > **列出当前账户下所有的 Modal volume**
@@ -353,6 +353,36 @@ modal volume delete <volume-name>
 > **上传本地文件到 volume**
 ```bash
 modal volume put <VOLUME_NAME> <LOCAL_PATH> <REMOTE_PATH>
-# modal volume put lamarck-data /data/lmk/hello.txt /hello.txt  # 上传到根目录
-# modal volume put lamarck-data /data/lmk/hello.txt /uploads/hello.txt  #  上传到指定文件夹下
+# modal volume put lamarck-data /data/lmk/hello.txt /hello.txt - 上传到根目录
+# modal volume put lamarck-data /data/lmk/hello.txt /uploads/hello.txt - 上传到指定文件夹下
+```
+
+> **从 volume 下载文件到本地**
+```bash
+modal volume get <VOLUME_NAME> <REMOTE_PATH> <LOCAL_PATH>
+# modal volume get lamarck-data /hello.txt /data/lmk/miao.txt
+```
+
+> **在 volume 中复制文件**
+```bash
+modal volume cp <VOLUME_NAME> <SRC> <DST>
+#  modal volume cp lamarck-data /rr.xlsx /uploads/rr.xlsx
+```
+
+> **在 volume 中删除文件**
+```bash
+modal volume rm <VOLUME_NAME> <REMOTE_PATH>
+# modal volume rm lamarck-data /uploads/rr.xlsx
+```
+
+> **给一个 volume 重命名**
+```bash
+modal volume rename <OLD_NAME> <NEW_NAME>
+# modal volume rename lamarck-data kcramal-data
+```
+
+> **在浏览器打开这个 volume 的 Modal 控制台页面**
+```bash
+modal volume dashboard <VOLUME_NAME>
+# modal volume dashboard lamarck-data
 ```
