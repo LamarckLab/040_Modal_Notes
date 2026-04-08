@@ -328,9 +328,19 @@ def f():
 #  🛠 Modal CLI Notes
 ---
 ### 001 -- Volume 相关
+> 列出当前账户下所有的 Modal volume
 ```bash
-modal volume list  # 列出当前账户下所有的 Modal volume
-modal volume ls <volume-name>  # 查看该 volume 内的文件
-modal volume create <volume-name>  # 创建一个新的 volume
-modal volume delete <volume-name>  # 删除某个 volume
+modal volume list
+```
+
+> 列出某个 volume 内部的文件和目录，不指定 PATH 就从根目录列起
+```bash
+modal volume ls <volume-name>  # modal volume ls alophafold3-data
+modal volume ls <VOLUME_NAME> [PATH]  # modal volume ls alophafold3-data /databases
+```
+
+> 创建或删除一个 volume
+```bash
+modal volume create <volume-name>  # modal volume create lamarck-data
+modal volume delete <volume-name>  # modal volume delete lamarck-data
 ```
