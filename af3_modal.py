@@ -1,39 +1,49 @@
-# af3_modal.py
 import modal
 
 app = modal.App("alphafold3-inference")
 
 # ============================================================
-# 镜像定义:严格对照 AlphaFold3 官方 Dockerfile 构建
+# 严格对照 AlphaFold3 官方 Dockerfile 构建 af3_image
 # ============================================================
 af3_image = (
     # 基础镜像:对齐官方的 CUDA 12.6.3 + Ubuntu 24.04 + Python 3.12
     modal.Image.from_registry(
-        "nvidia/cuda:12.6.3-base-ubuntu24.04",
-        add_python="3.12",
+        "nvidia/cuda:12.6.3-base-ubuntu24.04",  # 从 Docker Hub 拉镜像
+        add_python="3.12",  # cuda 镜像默认不带 Python (额外装一个)
     )
     # 系统依赖:编译工具、zlib、patch 等
     .apt_install(
-        "git", "wget", "gcc", "g++", "make",
-        "zlib1g-dev", "zstd", "patch", "clang",
+        "git",  # 等会要 git clone AF3的仓库
+        "wget",  # 下载 HMMER 源码包
+        "gcc", "g++", "make",  # 编译 HMMER (C语言写的)
+        "zlib1g-dev",  # HMMER 和 AF3 都依赖的压缩库 (负责 .gz 和 .zip)
+        "zstd",  # AF3 某些数据用到 (负责 .zst)
+        "patch",  # 给 HMMER 打补丁要用
+        "clang",  # 编译 AF3 自己的 C++ 拓展
     )
     # 安装 uv (AF3 官方用 uv 管理 Python 依赖)
     .pip_install("uv==0.9.24")
     # 设置 uv 和 PATH 环境变量
     .env({
+        # 让 uv 在安装时预编译 .pyc 字节码文件，容器启动时 Python 不用现场编译，启动更快
         "UV_COMPILE_BYTECODE": "1",
+        # 显式指定 uv 虚拟环境的路径
         "UV_PROJECT_ENVIRONMENT": "/alphafold3_venv",
+        # 把 /hmmer/bin（HMMER 二进制）和 /alphafold3_venv/bin（Python venv 的可执行文件）加到最前面
+        # 这样在命令行直接敲 jackhmmer 或 python 时，会找到我们装的版本，而不是系统自带的
         "PATH": "/hmmer/bin:/alphafold3_venv/bin:/usr/local/bin:/usr/bin:/bin",
     })
     # 创建 uv 虚拟环境
     .run_commands("uv venv /alphafold3_venv")
-    # 克隆 AF3 源码(后面需要从里面拿 HMMER 补丁文件)
+    # 克隆 AF3 源码 (后面需要从里面拿 HMMER 补丁文件)
     .run_commands(
         "git clone https://github.com/google-deepmind/alphafold3.git /app/alphafold",
     )
     # 下载 HMMER 3.4 源码并校验 sha256
     .run_commands(
+        # 创建两个目录：/hmmer_build 是临时构建目录，/hmmer 是最终安装目录
         "mkdir -p /hmmer_build /hmmer",
+        # 下载 HMMER 3.4 源码包
         "wget http://eddylab.org/software/hmmer/hmmer-3.4.tar.gz -P /hmmer_build",
         "cd /hmmer_build && echo 'ca70d94fd0cf271bd7063423aabb116d42de533117343a9b27a65c17ff06fbf3  hmmer-3.4.tar.gz' | sha256sum --check",
         "cd /hmmer_build && tar zxf hmmer-3.4.tar.gz && rm hmmer-3.4.tar.gz",
