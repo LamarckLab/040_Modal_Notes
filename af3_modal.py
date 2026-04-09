@@ -45,7 +45,9 @@ af3_image = (
         "mkdir -p /hmmer_build /hmmer",
         # 下载 HMMER 3.4 源码包
         "wget http://eddylab.org/software/hmmer/hmmer-3.4.tar.gz -P /hmmer_build",
+        # 校验 sha256 哈希，确保下载的文件没有损坏或被篡改 (这个哈希值是 DeepMind 验证过的，从 Dockerfile中取出来的)
         "cd /hmmer_build && echo 'ca70d94fd0cf271bd7063423aabb116d42de533117343a9b27a65c17ff06fbf3  hmmer-3.4.tar.gz' | sha256sum --check",
+        # 解压后删除 tar 包，省空间
         "cd /hmmer_build && tar zxf hmmer-3.4.tar.gz && rm hmmer-3.4.tar.gz",
     )
     # 应用 AF3 自带的 jackhmmer seq_limit 补丁(运行时必需)
@@ -83,42 +85,46 @@ af3_volume = modal.Volume.from_name("alphafold3-data")
 
 
 # ============================================================
-# 远程函数:在 H100 上跑 AlphaFold3 推理
+# 远程函数定义
 # ============================================================
 @app.function(
     image=af3_image,
-    volumes={"/data": af3_volume},
-    gpu="H100",
-    cpu=16,
-    memory=65536,         # 64 GB,MSA 阶段需要
-    timeout=60 * 60 * 3,  # 3 小时超时
+    volumes={"/data": af3_volume},  # 把 volume 挂在到容器的 /data 路径下
+    gpu="H100",  # 申请一块 H100 GPU
+    cpu=16,  # 预留 16 个 CPU 核心
+    memory=65536,  # 预留 64GB 内存
+    timeout=60 * 60 * 3,  # 函数最多跑 3 小时，超时会被强制终止
 )
-def run_alphafold3(fasta_json: str, job_name: str = "job"):
+def run_alphafold3(fasta_json: str, job_name: str = "job"):  # 如果调用者没传这个参数，就自动用 "job" 作为它的值
     import subprocess
     import pathlib
 
-    # 准备输入输出目录
+    # 在容器的 /tmp 下创建两个目录，/tmp 是容器本地的临时存储，函数结束后会被清空
     input_dir = pathlib.Path("/tmp/af_input")
     output_dir = pathlib.Path("/tmp/af_output")
+    # parents=True 表示缺父目录就自动建，exist_ok=True 表示已存在不报错
     input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 写入输入 JSON
+    # 把从本地传过来的 JSON 字符串写成容器里的一个文件
     input_path = input_dir / f"{job_name}.json"
     input_path.write_text(fasta_json)
 
-    # 运行 AlphaFold3 主脚本(用 uv run 确保在正确的虚拟环境里)
+    # 运行 AlphaFold3 主脚本
+    # 把命令拆成列表更安全（避免路径里有空格、特殊字符时被 shell 误解析）
     cmd = [
-        "uv", "run", "python3", "/app/alphafold/run_alphafold.py",
-        f"--json_path={input_path}",
-        "--model_dir=/data/parameters",
-        "--db_dir=/data/databases",
-        f"--output_dir={output_dir}",
+        "uv", "run", "python3", "/app/alphafold/run_alphafold.py",  # 用 uv run 在之前建好的虚拟环境里启动 Python
+        f"--json_path={input_path}",  # 输入文件位置
+        "--model_dir=/data/parameters",  # AF3 模型权重路径
+        "--db_dir=/data/databases",  # AF3 数据库路径
+        f"--output_dir={output_dir}",  # 输出结果路径
     ]
+    # subprocess 要求把命令拆成一个个"词"放进列表里，空格在哪里断开，列表就在哪里断开
     subprocess.run(cmd, check=True, cwd="/app/alphafold")
 
     # 收集输出文件(.cif 结构 + .json 置信度)
-    results = {}
+    results = {}  # 准备一个字典，键是文件名，值是文件内容
+    # 如果文件是 .cif 或者 .json 结尾，就将其存入字典
     for p in output_dir.rglob("*"):
         if p.is_file() and p.suffix in {".cif", ".json"}:
             results[str(p.relative_to(output_dir))] = p.read_text()
@@ -140,7 +146,7 @@ def main():
     print("Submitting job to Modal...")
     results = run_alphafold3.remote(fasta_json, job_name="2PV7")
 
-    # 保存结果到桌面的 output 文件夹
+    # 把 result 字典里每个文件写回桌面的 output 文件夹
     out = pathlib.Path(r"C:\Users\Lamarck\Desktop\output\2PV7")
     out.mkdir(parents=True, exist_ok=True)
     for name, content in results.items():
