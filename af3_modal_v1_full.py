@@ -1,17 +1,18 @@
 import modal
 
-app = modal.App("alphafold3-inference")
+app = modal.App("alphafold3-full")
 
 # ============================================================
 # 严格对照 AlphaFold3 官方 Dockerfile 构建 af3_image
 # ============================================================
+
 af3_image = (
     # 基础镜像:对齐官方的 CUDA 12.6.3 + Ubuntu 24.04 + Python 3.12
     modal.Image.from_registry(
         "nvidia/cuda:12.6.3-base-ubuntu24.04",  # 从 Docker Hub 拉镜像
         add_python="3.12",  # cuda 镜像默认不带 Python (额外装一个)
     )
-    # 系统依赖:编译工具、zlib、patch 等
+    # 安装系统依赖
     .apt_install(
         "git",  # 等会要 git clone AF3的仓库
         "wget",  # 下载 HMMER 源码包
@@ -29,7 +30,7 @@ af3_image = (
         "UV_COMPILE_BYTECODE": "1",
         # 显式指定 uv 虚拟环境的路径
         "UV_PROJECT_ENVIRONMENT": "/alphafold3_venv",
-        # 把 /hmmer/bin（HMMER 二进制）和 /alphafold3_venv/bin（Python venv 的可执行文件）加到最前面
+        # 把 /hmmer/bin（HMMER 二进制）和 /alphafold3_venv/bin (Python venv 的可执行文件) 加到最前面
         # 这样在命令行直接敲 jackhmmer 或 python 时，会找到我们装的版本，而不是系统自带的
         "PATH": "/hmmer/bin:/alphafold3_venv/bin:/usr/local/bin:/usr/bin:/bin",
     })
@@ -75,9 +76,9 @@ af3_image = (
         "XLA_FLAGS": "--xla_gpu_enable_triton_gemm=false",
         "XLA_PYTHON_CLIENT_PREALLOCATE": "true",
         "XLA_CLIENT_MEM_FRACTION": "0.95",
-        # JAX 一启动就把 GPU 显存的 95% 全部预占，
-        # 设计原因：JAX 反复申请/释放 GPU 显存会导致内存碎片化，影响大模型推理性能。
-        # 预占可以避免这个问题，代价是"看起来一直在用"。
+        # JAX 一启动就把 GPU 显存的 95% 全部预占
+        # 设计原因：JAX 反复申请/释放 GPU 显存会导致内存碎片化，影响大模型推理性能
+        # 预占可以避免这个问题，代价是"看起来一直在用"
     })
 )
 
@@ -93,9 +94,9 @@ af3_volume = modal.Volume.from_name("alphafold3-data")
 @app.function(
     image=af3_image,
     volumes={"/data": af3_volume},  # 把 volume 挂在到容器的 /data 路径下
-    gpu="H100",  # 申请 GPU
-    cpu=16,  # 预留 CPU 核心
-    memory=32768,  # 预留内存
+    gpu="H100",
+    cpu=16,
+    memory=32768,
     timeout=60 * 60 * 3,  # 函数最多跑 3 小时，超时会被强制终止
 )
 def run_alphafold3(fasta_json: str, job_name: str = "job"):  # 如果调用者没传这个参数，就自动用 "job" 作为它的值
