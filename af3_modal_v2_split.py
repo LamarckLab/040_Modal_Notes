@@ -83,11 +83,10 @@ af3_image = (
 )
 
 # ============================================================
-# Volume 声明
-# - af3_volume: 已有的数据库和权重(只读)
-# - msa_cache_volume: 存 MSA 中间结果(读写),首次运行会自动创建
+# 挂载已经上传好的 volume (包含 /databases 和 /parameters)
 # ============================================================
 af3_volume = modal.Volume.from_name("alphafold3-data")
+# alphafold3-msa-cache 用于保存 MSA 的中间文件，推理函数直接从这里读取
 msa_cache_volume = modal.Volume.from_name(
     "alphafold3-msa-cache",
     create_if_missing=True,
@@ -95,32 +94,35 @@ msa_cache_volume = modal.Volume.from_name(
 
 
 # ============================================================
-# 辅助函数:计算序列哈希,用于缓存去重
+# 辅助函数: 计算序列哈希,这是整个缓存机制的和核心
 # ============================================================
 def compute_sequence_hash(fasta_json: str) -> str:
     """
-    根据输入 JSON 里的序列内容计算一个稳定的哈希值。
-    同一组序列(顺序无关)总是得到相同的哈希。
-    用作 MSA 缓存的 key,实现"同序列自动复用 MSA"。
+    根据输入 JSON 里的序列内容计算对应哈希值。
+    哈希值用作缓存的 key，MSA 的输出 JSON 作为 value。
     """
     import hashlib
     import json
 
+    # 把传进来的 JSON 字符串解析成 Python 字典
     data = json.loads(fasta_json)
-    # 提取所有序列,排序后拼接(保证顺序无关)
+    # 遍历 JSON 里的 sequence 列表，从每个条目里提取序列字符串
+    # 每个 entry 格式是这样的 {"protein": {"id": ["A", "B"], "sequence": "GMRES..."}}
+    # 最终会拼成 "protein:GMRES..." 这种形式塞进 seqs 列表
     seqs = []
     for entry in data.get("sequences", []):
         for mol_type in ("protein", "rna", "dna"):
             if mol_type in entry:
                 seqs.append(f"{mol_type}:{entry[mol_type]['sequence']}")
+    # 排序一下，避免多条链的情况下，拼出来序列不一样
     seqs.sort()
+    # 把排好序的序列列表用 | 拼成一个长字符串，丢进 SHA-256 哈希函数，取结果的前 16 个十六进制字符
     joined = "|".join(seqs)
     return hashlib.sha256(joined.encode()).hexdigest()[:16]
 
 
 # ============================================================
-# 函数 1: 数据管线(MSA 搜索)
-# 资源画像: CPU 密集,无 GPU,中等内存
+# 函数 1: MSA 搜索 + 模板搜索
 # ============================================================
 @app.function(
     image=af3_image,
@@ -133,29 +135,27 @@ def compute_sequence_hash(fasta_json: str) -> str:
     timeout=60 * 60 * 2,
 )
 def run_data_pipeline(fasta_json: str, job_name: str) -> str:
-    """
-    跑 AlphaFold3 的数据管线阶段(MSA + 模板搜索)。
-
-    Returns:
-        seq_hash: 序列哈希,作为 MSA 缓存的 key,后续推理阶段用它找中间文件
-    """
+    # 返回值是 16 位哈希，是 /msa_cache 下的子目录名
     import subprocess
     import pathlib
     import shutil
 
+    # 计算当前序列的哈希
     seq_hash = compute_sequence_hash(fasta_json)
+    # 检查目录里有没有这个哈希的缓存文件夹
     cache_dir = pathlib.Path(f"/msa_cache/{seq_hash}")
 
-    # 检查缓存命中:如果已经跑过,直接返回
+    # 检查缓存命中 (该文件夹存在并且子目录中的 .json 也存在)
     if cache_dir.exists() and any(cache_dir.rglob("*_data.json")):
         print(f"[cache hit] MSA already exists for seq_hash={seq_hash}, skipping data pipeline")
         return seq_hash
 
     print(f"[cache miss] Running data pipeline for seq_hash={seq_hash}")
 
-    # 准备输入输出目录
+    # 在容器的 /tmp 下创建两个目录，/tmp 是容器本地的临时存储，函数结束后会被清空
     input_dir = pathlib.Path("/tmp/af_input")
     output_dir = pathlib.Path("/tmp/af_output")
+    # parents=True 表示缺父目录就自动建，exist_ok=True 表示已存在不报错
     input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
