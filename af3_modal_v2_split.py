@@ -92,6 +92,11 @@ msa_cache_volume = modal.Volume.from_name(
     create_if_missing=True,
 )
 
+# ============================================================
+# 常量:输入文件夹和输出文件夹的默认位置
+# ============================================================
+INPUT_DIR = r"C:\Users\Lamarck\Desktop\af3_inputs"
+OUTPUT_DIR = r"C:\Users\Lamarck\Desktop\output"
 
 # ============================================================
 # 辅助函数1: 计算序列哈希,这是整个缓存机制的和核心
@@ -274,17 +279,19 @@ def save_results_locally(results: dict, local_out_dir):
 
 # ============================================================
 # 入口 1: 完整流程(数据管线 + 推理)
-# 用法: modal run af3_modal_v2_split.py
+# 用法:
+#   modal run af3_modal_v2_split.py::main --protein 2PV7
+#   modal run af3_modal_v2_split.py::main                 (默认 2PV7)
 # ============================================================
 @app.local_entrypoint()
-def main():
+def main(protein: str = "2PV7"):
     import pathlib
 
-    # 配置区:按需修改
-    input_file = pathlib.Path(r"C:\Users\Lamarck\Desktop\af3_fold_input.json")
-    job_name = "2PV7"
-    output_base = pathlib.Path(r"C:\Users\Lamarck\Desktop\output")
+    input_file = pathlib.Path(INPUT_DIR) / f"{protein}.json"
+    if not input_file.exists():
+        raise FileNotFoundError(f"Input file not found: {input_file}")
 
+    job_name = protein
     fasta_json = input_file.read_text(encoding="utf-8")
 
     # 阶段 1: 数据管线(缓存命中的话直接返回)
@@ -301,53 +308,54 @@ def main():
     results = run_inference.remote(seq_hash, job_name)
 
     # 保存结果
+    output_base = pathlib.Path(OUTPUT_DIR)
     save_results_locally(results, output_base / job_name)
 
 
 # ============================================================
 # 入口 2: 只跑数据管线
-# 用法: modal run af3_modal_v2_split.py::only_msa
+# 用法: modal run af3_modal_v2_split.py::only_msa --protein 2PV7
 # ============================================================
 @app.local_entrypoint()
-def only_msa(
-    input_json: str = r"C:\Users\Lamarck\Desktop\af3_fold_input.json",
-    job_name: str = "2PV7",
-):
+def only_msa(protein: str = "2PV7"):
     import pathlib
 
-    input_file = pathlib.Path(input_json)
+    input_file = pathlib.Path(INPUT_DIR) / f"{protein}.json"
+    if not input_file.exists():
+        raise FileNotFoundError(f"Input file not found: {input_file}")
+
+    job_name = protein
     fasta_json = input_file.read_text(encoding="utf-8")
 
     print(f"Running MSA only for job: {job_name}")
     seq_hash = run_data_pipeline.remote(fasta_json, job_name)
     print(f"MSA done. seq_hash = {seq_hash}")
     print(f"You can now run inference with:")
-    print(f"  modal run af3_modal_v2_split.py::only_inference --job-name {job_name}")
+    print(f"  modal run af3_modal_v2_split.py::only_inference --protein {protein}")
 
 
 # ============================================================
-# 入口 3: 只跑推理
-# 用法: modal run af3_modal_v1_full.py::only_inference --job-name 2PV7
-# 前提: 对应序列的 MSA 必须已经在缓存里
+# 入口 3: 只跑推理(需要 MSA 缓存已存在)
+# 用法: modal run af3_modal_v2_split.py::only_inference --protein 2PV7
 # ============================================================
 @app.local_entrypoint()
-def only_inference(
-    job_name: str = "2PV7",
-    input_json: str = r"C:\Users\Lamarck\Desktop\af3_fold_input.json",
-):
+def only_inference(protein: str = "2PV7"):
     import pathlib
 
-    input_file = pathlib.Path(input_json)
+    input_file = pathlib.Path(INPUT_DIR) / f"{protein}.json"
+    if not input_file.exists():
+        raise FileNotFoundError(f"Input file not found: {input_file}")
+
+    job_name = protein
     fasta_json = input_file.read_text(encoding="utf-8")
 
     # 根据输入序列算出 seq_hash,定位缓存
     seq_hash = compute_sequence_hash(fasta_json)
-    print(f"Looking up MSA cache for seq_hash = {seq_hash}")
+    print(f"Looking up MSA cache for seq_hash = {seq_hash} (job: {job_name})")
 
     # 直接跑推理
     results = run_inference.remote(seq_hash, job_name)
 
     # 保存结果
-    output_base = pathlib.Path(r"C:\Users\Lamarck\Desktop\output")
-    save_results_locally(results, output_base / f"{job_name}_rerun")
-
+    output_base = pathlib.Path(OUTPUT_DIR)
+    save_results_locally(results, output_base / f"{job_name}")
