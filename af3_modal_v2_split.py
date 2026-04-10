@@ -94,7 +94,7 @@ msa_cache_volume = modal.Volume.from_name(
 
 
 # ============================================================
-# 辅助函数: 计算序列哈希,这是整个缓存机制的和核心
+# 辅助函数1: 计算序列哈希,这是整个缓存机制的和核心
 # ============================================================
 def compute_sequence_hash(fasta_json: str) -> str:
     """
@@ -122,7 +122,7 @@ def compute_sequence_hash(fasta_json: str) -> str:
 
 
 # ============================================================
-# 函数 1: MSA 搜索 + 模板搜索
+# 函数 1: 数据管线阶段：MSA 搜索 + 模板搜索
 # ============================================================
 @app.function(
     image=af3_image,
@@ -159,6 +159,7 @@ def run_data_pipeline(fasta_json: str, job_name: str) -> str:
     input_dir.mkdir(parents=True, exist_ok=True)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # 把从本地传过来的 JSON 字符串写成容器里的一个文件
     input_path = input_dir / f"{job_name}.json"
     input_path.write_text(fasta_json)
 
@@ -168,21 +169,23 @@ def run_data_pipeline(fasta_json: str, job_name: str) -> str:
         f"--json_path={input_path}",
         "--db_dir=/data/databases",
         f"--output_dir={output_dir}",
-        "--norun_inference",  # 关键 flag:跳过推理
+        "--norun_inference",  # 告诉 AF3 只跑数据管线，不要做推理
     ]
     subprocess.run(cmd, check=True, cwd="/app/alphafold")
 
-    # 把 AF3 生成的中间文件拷贝到 MSA 缓存 volume
+    # 把 AF3 生成的中间文件拷贝到数据管线缓存 volume
+    # 创建缓存目录
     cache_dir.mkdir(parents=True, exist_ok=True)
+    # 遍历 /tmp/af_output/ 下的所有子目录，拷贝到缓存目录
     for item in output_dir.iterdir():
         if item.is_dir():
-            # AF3 会在 output_dir 下建一个以 job_name 命名的子目录
+            # AF3 会在缓存目录下建一个以 job_name 命名的子目录
             dest = cache_dir / item.name
             if dest.exists():
                 shutil.rmtree(dest)
             shutil.copytree(item, dest)
 
-    # 重要:提交 volume 修改,让其他容器能看到新文件
+    # 提交 volume 修改
     msa_cache_volume.commit()
     print(f"[done] MSA cached at /msa_cache/{seq_hash}")
 
@@ -191,7 +194,6 @@ def run_data_pipeline(fasta_json: str, job_name: str) -> str:
 
 # ============================================================
 # 函数 2: 模型推理
-# 资源画像: GPU 密集,少量 CPU,中等内存
 # ============================================================
 @app.function(
     image=af3_image,
@@ -205,24 +207,16 @@ def run_data_pipeline(fasta_json: str, job_name: str) -> str:
     timeout=60 * 60 * 1,
 )
 def run_inference(seq_hash: str, job_name: str) -> dict:
-    """
-    从 MSA 缓存读取中间文件,跑 diffusion 采样生成结构。
-
-    Args:
-        seq_hash: 由 run_data_pipeline 返回的序列哈希
-        job_name: AF3 任务名,决定输出子目录名
-
-    Returns:
-        results: {相对路径: 文件内容} 字典,包含 .cif 和 .json
-    """
+    # 从 MSA 缓存读取中间文件,跑 diffusion 采样生成结构
     import subprocess
     import pathlib
     import shutil
 
-    # 从 volume 刷新最新状态(可能是别的容器刚写的)
+    # 让当前容器拉取 volume 的最新状态
     msa_cache_volume.reload()
 
     cache_dir = pathlib.Path(f"/msa_cache/{seq_hash}")
+    # 检查缓存文件夹是否存在，若 MSA 部分没跑过，抛出错误提示
     if not cache_dir.exists():
         raise FileNotFoundError(
             f"MSA cache not found at {cache_dir}. "
@@ -230,7 +224,6 @@ def run_inference(seq_hash: str, job_name: str) -> dict:
         )
 
     # 把缓存的中间文件拷贝到 AF3 的工作目录
-    # AF3 要求 --json_path 指向包含 MSA 的中间 JSON
     work_dir = pathlib.Path("/tmp/af_work")
     if work_dir.exists():
         shutil.rmtree(work_dir)
@@ -247,17 +240,17 @@ def run_inference(seq_hash: str, job_name: str) -> dict:
     output_dir = pathlib.Path("/tmp/af_output")
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 运行 AF3,跳过数据管线,只做推理
+    # 运行 AF3，跳过数据管线，只做推理
     cmd = [
         "uv", "run", "python3", "/app/alphafold/run_alphafold.py",
         f"--json_path={data_json_path}",
         "--model_dir=/data/parameters",
         f"--output_dir={output_dir}",
-        "--norun_data_pipeline",  # 关键 flag:跳过数据管线
+        "--norun_data_pipeline",  # 跳过数据管线，只做推理
     ]
     subprocess.run(cmd, check=True, cwd="/app/alphafold")
 
-    # 收集输出(.cif 结构 + .json 置信度)
+    # 遍历输出目录，挑出 .cif 和 .json，打包成字典返回 (只拿结构和置信度文件)。
     results = {}
     for p in output_dir.rglob("*"):
         if p.is_file() and p.suffix in {".cif", ".json"}:
@@ -266,10 +259,9 @@ def run_inference(seq_hash: str, job_name: str) -> dict:
 
 
 # ============================================================
-# 辅助函数:把结果字典保存到本地
+# 辅助函数2:把结果字典保存到本地
 # ============================================================
 def save_results_locally(results: dict, local_out_dir):
-    """把 {相对路径: 内容} 字典写到本地目录。"""
     import pathlib
     out = pathlib.Path(local_out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -281,11 +273,11 @@ def save_results_locally(results: dict, local_out_dir):
 
 
 # ============================================================
-# 入口 1: 完整流程(MSA + 推理)
+# 入口 1: 完整流程(数据管线 + 推理)
+# 用法: modal run af3_modal_v2_split.py
 # ============================================================
 @app.local_entrypoint()
 def main():
-    """完整流程:先跑数据管线(如果缓存未命中),再跑推理。"""
     import pathlib
 
     # 配置区:按需修改
@@ -295,7 +287,7 @@ def main():
 
     fasta_json = input_file.read_text(encoding="utf-8")
 
-    # 阶段 1: 数据管线(可能命中缓存直接返回)
+    # 阶段 1: 数据管线(缓存命中的话直接返回)
     print("=" * 60)
     print(f"[Stage 1/2] Running data pipeline for job: {job_name}")
     print("=" * 60)
@@ -313,7 +305,28 @@ def main():
 
 
 # ============================================================
-# 入口 2: 只跑推理(跳过 MSA 阶段)
+# 入口 2: 只跑数据管线
+# 用法: modal run af3_modal_v2_split.py::only_msa
+# ============================================================
+@app.local_entrypoint()
+def only_msa(
+    input_json: str = r"C:\Users\Lamarck\Desktop\af3_fold_input.json",
+    job_name: str = "2PV7",
+):
+    import pathlib
+
+    input_file = pathlib.Path(input_json)
+    fasta_json = input_file.read_text(encoding="utf-8")
+
+    print(f"Running MSA only for job: {job_name}")
+    seq_hash = run_data_pipeline.remote(fasta_json, job_name)
+    print(f"MSA done. seq_hash = {seq_hash}")
+    print(f"You can now run inference with:")
+    print(f"  modal run af3_modal_v2_split.py::only_inference --job-name {job_name}")
+
+
+# ============================================================
+# 入口 3: 只跑推理
 # 用法: modal run af3_modal_v1_full.py::only_inference --job-name 2PV7
 # 前提: 对应序列的 MSA 必须已经在缓存里
 # ============================================================
@@ -322,10 +335,6 @@ def only_inference(
     job_name: str = "2PV7",
     input_json: str = r"C:\Users\Lamarck\Desktop\af3_fold_input.json",
 ):
-    """
-    只跑推理,跳过 MSA。
-    需要提供原始输入 JSON 用来计算序列哈希,定位 MSA 缓存。
-    """
     import pathlib
 
     input_file = pathlib.Path(input_json)
@@ -342,26 +351,3 @@ def only_inference(
     output_base = pathlib.Path(r"C:\Users\Lamarck\Desktop\output")
     save_results_locally(results, output_base / f"{job_name}_rerun")
 
-# ============================================================
-# 入口 3: 只跑 MSA(预热缓存,不推理)
-# 用法: modal run af3_modal_v2_split.py::only_msa
-# ============================================================
-@app.local_entrypoint()
-def only_msa(
-    input_json: str = r"C:\Users\Lamarck\Desktop\af3_fold_input.json",
-    job_name: str = "2PV7",
-):
-    """
-    只跑数据管线(MSA + 模板搜索),把结果存到缓存 volume,不做推理。
-    适合提前预热缓存,或批量预处理多个序列的 MSA。
-    """
-    import pathlib
-
-    input_file = pathlib.Path(input_json)
-    fasta_json = input_file.read_text(encoding="utf-8")
-
-    print(f"Running MSA only for job: {job_name}")
-    seq_hash = run_data_pipeline.remote(fasta_json, job_name)
-    print(f"MSA done. seq_hash = {seq_hash}")
-    print(f"You can now run inference with:")
-    print(f"  modal run af3_modal_v2_split.py::only_inference --job-name {job_name}")
