@@ -1,41 +1,72 @@
-#  ☁️ Modal Core Notes
+# ☁️ Modal Core Notes
+
+> Modal 是一个无服务器云计算平台，允许用 Python 定义远程函数并调用云端 GPU/CPU 资源，无需管理服务器与环境。通过 Image 声明依赖，实现代码级调度，适合 AI 与高性能计算任务。
+
+<details>
+<summary><b>📖 目录</b></summary>
+
+- [001 · Modal 介绍](#001--modal-介绍)
+- [002 · 官方的 Hello World](#002--官方的-hello-world)
+- [003 · Modal 的 App 类](#003--modal-的-app-类)
+- [004 · Modal 的 image 容器](#004--modal-的-image-容器)
+- [005 · Modal 的两个常用装饰器](#005--modal-的两个常用装饰器)
+- [006 · Modal 的执行链路](#006--modal-的执行链路)
+- [007 · `.remote()` 方法](#007--remote-方法)
+- [008 · Modal 提供的 GPU 类型](#008--modal-提供的-gpu-类型)
+- [009 · 指定远程函数的 GPU 类型和数量](#009--指定远程函数的-gpu-类型和数量)
+- [010 · Modal image 的定义](#010--modal-image-的定义)
+- [011 · 在 image 中添加 Python 包](#011--在-image-中添加-python-包)
+- [012 · 把本地文件传递到 image 中](#012--把本地文件传递到-image-中)
+- [013 · 导入包写在函数内部](#013--导入包写在函数内部)
+- [014 · 在 image 中安装系统包](#014--在-image-中安装系统包)
+- [015 · 设置 image 中的环境变量](#015--设置-image-中的环境变量)
+- [016 · 构建 image 时运行 shell 命令](#016--构建-image-时运行-shell-命令)
+- [017 · 构建 image 时提前运行一段 Python 代码](#017--构建-image-时提前运行一段-python-代码)
+- [018 · 在 image 构建阶段附加 GPU](#018--在-image-构建阶段附加-gpu)
+- [019 · image 的缓存与重建](#019--image-的缓存与重建)
+- [020 · 使用 `.from_registry` 从公共镜像仓库加载镜像](#020--使用-from_registry-从公共镜像仓库加载镜像)
+- [021 · 使用 `.from_dockerfile` 自定义镜像](#021--使用-from_dockerfile-自定义镜像)
+- [022 · 配置 CPU、内存和硬盘](#022--配置-cpu内存和硬盘)
+- [023 · Modal 的计费逻辑](#023--modal-的计费逻辑)
+- [☁️ Modal CLI Notes](#️-modal-cli-notes)
+
+</details>
+
 ---
 
-### 001 -- Modal 介绍
-```text
-Modal 是一个无服务器云计算平台，允许用 Python 定义远程函数并调用云端 GPU/CPU 资源，无需管理服务器与环境。通过 Image 声明依赖，实现代码级调度，适合 AI 与高性能计算任务。
-```
+## 001 · Modal 介绍
 
-### 002 -- 官方的 Hello World 
+Modal 是一个无服务器云计算平台，允许用 Python 定义远程函数并调用云端 GPU/CPU 资源，无需管理服务器与环境。通过 Image 声明依赖，实现代码级调度，适合 AI 与高性能计算任务。
+
+## 002 · 官方的 Hello World
+
 <img src="images/pic1.png" alt="pic1" width="900">
 
-```text
-通过在终端运行 modal run xxx.py 来提交任务
-```
+> [!TIP]
+> 通过在终端运行 `modal run xxx.py` 来提交任务。
 
-### 003 -- Modal 的 App 类
-```text
-App 实例是 Modal 的"顶层组织单元"，用于注册、组织远程函数及其依赖资源，并作为任务提交到云端执行的入口
-```
+## 003 · Modal 的 App 类
 
-### 004 -- Modal 的 image 容器
-```text
+`App` 实例是 Modal 的"顶层组织单元"，用于注册、组织远程函数及其依赖资源，并作为任务提交到云端执行的入口。
+
+## 004 · Modal 的 image 容器
+
 Modal image 是供远程函数运行的容器环境，这个远程环境里包括：
+
 - 操作系统基础层
 - Python 解释器
 - Python 包
 - 环境变量
 - ...
-```
 
-### 005 -- Modal 的两个常用装饰器
+## 005 · Modal 的两个常用装饰器
+
+- `@app.function` — 定义云端执行函数 & 分配计算资源
+- `@app.local_entrypoint` — 定义本地入口函数
+
+## 006 · Modal 的执行链路
+
 ```text
-- @app.function - 定义云端执行函数 & 分配计算资源
-- @app.local_entrypoint - 定义本地入口函数
-```
-
-### 006 -- Modal 的执行链路
-```bash
 App
  ├── Function (@app.function)
  │     └── 运行在远程容器（image）
@@ -44,48 +75,56 @@ App
  └── Entrypoint（本地入口）
 ```
 
-### 007 -- .remote( )方法
-```text
-.remote() 用于将函数调用并提交到云端执行
-```
+## 007 · `.remote()` 方法
 
-### 008 -- Modal 提供的 GPU 类型
-| GPU 型号                            | 显存 (VRAM)              | 价格      |
-| :---------------------------------- | :----------------------- | :-------- |
-| T4                                  | 16 GB                    | $0.59 / h |
-| L4                                  | 24 GB                    | $0.80 / h |
-| A10                                 | 24 GB                    | $1.10 / h |
-| L40S                                | 48 GB                    | $1.95 / h |
-| A100-40GB                           | 40 GB                    | $2.10 / h |
-| A100-80GB                           | 80 GB                    | $2.50 / h |
-| RTX PRO 6000（一般指 RTX 6000 Ada） | 48 GB                    | $3.03 / h |
-| H100                                | 80 GB                    | $3.95 / h |
-| H200                                | 141 GB                   | $4.54 / h |
-| B200 / B200+                        | 192 GB（Blackwell 架构） | $6.25 / h |
+`.remote()` 用于将函数调用并提交到云端执行。
 
-### 009 -- 指定远程函数的 GPU 类型和数量
-1. 指定 GPU 类型
+## 008 · Modal 提供的 GPU 类型
+
+| GPU 型号 | 显存 (VRAM) | 价格 |
+| :--- | :--- | :--- |
+| T4 | 16 GB | $0.59 / h |
+| L4 | 24 GB | $0.80 / h |
+| A10 | 24 GB | $1.10 / h |
+| L40S | 48 GB | $1.95 / h |
+| A100-40GB | 40 GB | $2.10 / h |
+| A100-80GB | 80 GB | $2.50 / h |
+| RTX PRO 6000（一般指 RTX 6000 Ada） | 48 GB | $3.03 / h |
+| H100 | 80 GB | $3.95 / h |
+| H200 | 141 GB | $4.54 / h |
+| B200 / B200+ | 192 GB（Blackwell 架构） | $6.25 / h |
+
+## 009 · 指定远程函数的 GPU 类型和数量
+
+**1. 指定 GPU 类型**
+
 ```python
 @app.function(gpu="B200") # 使用 1 张 B200
 ```
 
-2. 使用多张卡
+**2. 使用多张卡**
+
 ```python
 @app.function(gpu="H100:8")
 def run_llama_405b_fp8():
     ...
 ```
 
-3. 回退机制
+**3. 回退机制**
+
 ```python
 @app.function(gpu=["H100", "A100-40GB:2"]) # 优先使用 H100，如果没有可用资源，则回退到 2 张 A100-40GB
 def run_on_80gb():
     ...
 ```
-#### [Modal GPU Doc](https://modal.com/docs/guide/gpu)
 
-### 010 -- Modal image 的定义
->**在 Modal 中定义 image 的典型流程是：从一个基础镜像 (base Image) 开始，通过方法链 (method chaining) 逐步构建，可以为每一个函数单独定义不同的运行环境**
+> 📚 参考：[Modal GPU Doc](https://modal.com/docs/guide/gpu)
+
+## 010 · Modal image 的定义
+
+> [!NOTE]
+> 在 Modal 中定义 image 的典型流程是：从一个基础镜像 (base Image) 开始，通过方法链 (method chaining) 逐步构建，可以为每一个函数单独定义不同的运行环境。
+
 ```python
 image = (
     modal.Image.debian_slim(python_version="3.13") # 创建一个基础镜像 (精简版 Debian Linux，Python version 3.13)
@@ -95,12 +134,17 @@ image = (
     .run_commands("git clone https://github.com/modal-labs/agi && echo 'ready to go!'") # 构建这个 image 时，运行这条 shell 命令
 )
 ```
-#### [直接使用已有镜像，比如从DockerFile导入](https://modal.com/docs/guide/existing-images)
 
-### 011 -- 在 image 中添加 Python 包
-> **可以通过将所需的所有包传给 image.uv_pip_install 方法，将 Python 包添加到环境中**
+> 📚 参考：[直接使用已有镜像，比如从 Dockerfile 导入](https://modal.com/docs/guide/existing-images)
 
-> **建议严格固定依赖版本，比如"pandas==2.2.0"、"torch<3"，以提高构建的可复现性**
+## 011 · 在 image 中添加 Python 包
+
+> [!NOTE]
+> 可以通过将所需的所有包传给 `image.uv_pip_install` 方法，将 Python 包添加到环境中。
+
+> [!TIP]
+> 建议严格固定依赖版本，比如 `"pandas==2.2.0"`、`"torch<3"`，以提高构建的可复现性。
+
 ```python
 datascience_image = (
     modal.Image.debian_slim()
@@ -115,7 +159,8 @@ def my_function():
     ...
 ```
 
-> **如果在使用 image.uv_pip_install 时遇到问题，你可以回退使用 image.pip_install，它使用标准的 pip**
+> [!WARNING]
+> 如果在使用 `image.uv_pip_install` 时遇到问题，你可以回退使用 `image.pip_install`，它使用标准的 pip。
 
 ```python
 datascience_image = (
@@ -124,16 +169,19 @@ datascience_image = (
 )
 ```
 
-### 012 -- 把本地文件传递到 image 中
-> **有时容器需要一些无法从互联网获取的依赖，可以使用 image.add_local_dir 和 image.add_local_file 方法，将本地系统中的文件传递到容器中**
->
+## 012 · 把本地文件传递到 image 中
+
+> [!NOTE]
+> 有时容器需要一些无法从互联网获取的依赖，可以使用 `image.add_local_dir` 和 `image.add_local_file` 方法，将本地系统中的文件传递到容器中。
 
 ```python
 image = modal.Image.debian_slim().add_local_dir("/user/erikbern/.aws", remote_path="/root/.aws")
 ```
 
-### 013 -- 导入包写在函数内部
-> **若本地未安装某包（如 pandas），不要在脚本顶部全局 import，否则会报 ImportError；应将 import 写在函数内部，使其仅在远程容器运行时加载（容器中已安装该包）**
+## 013 · 导入包写在函数内部
+
+> [!WARNING]
+> 若本地未安装某包（如 pandas），不要在脚本顶部全局 import，否则会报 `ImportError`；应将 import 写在函数内部，使其仅在远程容器运行时加载（容器中已安装该包）。
 
 ```python
 datascience_image = (
@@ -149,7 +197,8 @@ def my_function():
     ...
 ```
 
-> **如果有多个函数，且共享部分依赖，可以使用 image.imports 实现全局作用**
+> [!TIP]
+> 如果有多个函数，且共享部分依赖，可以使用 `image.imports` 实现全局作用。
 
 ```python
 pandas_image = modal.Image.debian_slim().pip_install("pandas", "numpy")
@@ -164,22 +213,25 @@ def my_function():
     ...
 ```
 
-### 014 -- 在 image 中安装系统包
-> 使用 Image.apt_install 来安装 Linux 系统包
+## 014 · 在 image 中安装系统包
+
+> 使用 `Image.apt_install` 来安装 Linux 系统包。
 
 ```python
 image = modal.Image.debian_slim().apt_install("git", "curl")
 ```
 
-### 015 -- 设置 image 中的环境变量
-> 向 image.env 传入一个字典，来修改代码可见的环境变量
+## 015 · 设置 image 中的环境变量
+
+> 向 `image.env` 传入一个字典，来修改代码可见的环境变量。
 
 ```python
 image = modal.Image.debian_slim().env({"PORT": "6443"})
 ```
 
-### 016 -- 构建 image 时运行 shell 命令
-> 通过 Image.run_commands 在构建 image 时执行 shell 命令
+## 016 · 构建 image 时运行 shell 命令
+
+> 通过 `Image.run_commands` 在构建 image 时执行 shell 命令。
 
 ```python
 image_with_repo = (
@@ -191,10 +243,10 @@ image_with_repo = (
 )
 ```
 
-### 017 -- 构建 image 时提前运行一段 Python 代码
-> 此处举一个例子：把 Hugging Face 上的模型下载到容器缓存里
+## 017 · 构建 image 时提前运行一段 Python 代码
 
-> 本质上，这相当于运行一个 Modal Function，并将执行后的文件系统状态快照为一个新的 image
+> [!NOTE]
+> 此处举一个例子：把 Hugging Face 上的模型下载到容器缓存里。本质上，这相当于运行一个 Modal Function，并将执行后的文件系统状态快照为一个新的 image。
 
 ```python
 import os # 导入 Python 标准库，后续用于读取环境变量
@@ -220,8 +272,9 @@ image = (
 )
 ```
 
-### 018 -- 在 image 构建阶段，附加 GPU
-> 如果在构建 image 的某一步需要在带 GPU 的实例上运行（例如某些包在安装时检测 GPU 以设置编译参数），可以在定义该步骤时指定所需的 GPU 类型
+## 018 · 在 image 构建阶段附加 GPU
+
+> 如果在构建 image 的某一步需要在带 GPU 的实例上运行（例如某些包在安装时检测 GPU 以设置编译参数），可以在定义该步骤时指定所需的 GPU 类型。
 
 ```python
 image = (
@@ -230,8 +283,10 @@ image = (
 )
 ```
 
-### 019 -- image 的缓存与重建
-> Modal 根据 image 定义决定是否重建；若未变化则直接使用缓存。image 按层缓存（每个方法调用一层），某一层变动会导致其后的层全部重建，因此应将稳定步骤放前、易变步骤放后以提升构建效率。若需强制重建，可在构建方法中设置 force_build=True。
+## 019 · image 的缓存与重建
+
+> [!IMPORTANT]
+> Modal 根据 image 定义决定是否重建；若未变化则直接使用缓存。image 按层缓存（每个方法调用一层），某一层变动会导致其后的层全部重建，因此应将稳定步骤放前、易变步骤放后以提升构建效率。若需强制重建，可在构建方法中设置 `force_build=True`。
 
 ```python
 image = (
@@ -242,11 +297,13 @@ image = (
 )
 ```
 
-### 020 -- 使用 .from_registry 从公共镜像仓库加载镜像
-> from_registry 方法可以从所有公共镜像仓库加载镜像，例如：
-- Nvidia - nvcr.io
-- AWS - ECR
-- GitHub - ghcr.io
+## 020 · 使用 `.from_registry` 从公共镜像仓库加载镜像
+
+> `from_registry` 方法可以从所有公共镜像仓库加载镜像，例如：
+>
+> - Nvidia — `nvcr.io`
+> - AWS — ECR
+> - GitHub — `ghcr.io`
 
 ```python
 sklearn_image = modal.Image.from_registry("huanjason/scikit-learn")
@@ -257,14 +314,16 @@ def fit_knn():
     ...
 ```
 
-> 也可以像操作其他 Modal image 一样，对这个镜像进行进一步修改
+> 也可以像操作其他 Modal image 一样，对这个镜像进行进一步修改。
 
 ```python
 data_science_image = sklearn_image.uv_pip_install("polars", "datasette")
 ```
 
-### 021 -- 使用 .from_dockerfile 自定义镜像
-> 可以通过将 Dockerfile 的路径传递给 Image.from_dockerfile，从已有的 Dockerfile 定义一个 Image
+## 021 · 使用 `.from_dockerfile` 自定义镜像
+
+> 可以通过将 Dockerfile 的路径传递给 `Image.from_dockerfile`，从已有的 Dockerfile 定义一个 Image。
+
 ```python
 dockerfile_image = modal.Image.from_dockerfile("Dockerfile")
 
@@ -275,10 +334,11 @@ def fit():
     ...
 ```
 
-### 022 -- 配置 CPU、内存和硬盘
-每个 Modal Function 或 Sandbox 容器默认请求 0.125 个 CPU 核心 和 128 MiB 内存，如果 worker 节点有可用的 CPU 或内存，容器可以超过这个最小值运行，但更好的做法是通过请求更大的资源值来保证获得更多资源
+## 022 · 配置 CPU、内存和硬盘
 
-> 如果代码需要运行在更多 CPU 核心上，可以通过 cpu 参数进行指定 (浮点数形式)
+每个 Modal Function 或 Sandbox 容器默认请求 **0.125 个 CPU 核心** 和 **128 MiB 内存**，如果 worker 节点有可用的 CPU 或内存，容器可以超过这个最小值运行，但更好的做法是通过请求更大的资源值来保证获得更多资源。
+
+> 如果代码需要运行在更多 CPU 核心上，可以通过 `cpu` 参数进行指定 (浮点数形式)。
 
 ```python
 import modal
@@ -291,7 +351,7 @@ def my_function():
     ...
 ```
 
-> 如果代码需要更多可保证的内存，可以通过 memory 参数来请求 (整数形式)，单位是MB
+> 如果代码需要更多可保证的内存，可以通过 `memory` 参数来请求 (整数形式)，单位是 MB。
 
 ```python
 import modal
@@ -304,11 +364,11 @@ def my_function():
     ...
 ```
 
-磁盘请求是按照 20 倍内存请求来计算
+> [!NOTE]
+> - 磁盘请求是按照 **20 倍内存请求** 来计算。
+> - CPU 默认上限 = 你请求的 CPU + 16 个物理核心（当 CPU 请求是 0.125 核，那默认软上限就是 16.125 核）。
 
-CPU 默认上限 = 你请求的 CPU + 16 个物理核心 (当CPU 请求是 0.125 核，那默认软上限就是 16.125 核)
-
-> 手动显式设置 CPU 上限
+> 手动显式设置 CPU 上限：
 
 ```python
 cpu_request = 1.0
@@ -319,20 +379,31 @@ def f():
     ...
 ```
 
-### 023 -- Modal 的计费逻辑
-一个 Function 在部署后作为一个独立单元运行，如果没有实时输入传入该 Function，则不会运行任何默认容器，即使它所属的 App 已经部署，你的账户也不会因此被收取计算资源费用。
+## 023 · Modal 的计费逻辑
 
+> [!IMPORTANT]
+> 一个 Function 在部署后作为一个独立单元运行，如果没有实时输入传入该 Function，则不会运行任何默认容器，即使它所属的 App 已经部署，你的账户也不会因此被收取计算资源费用。
 
-
-#  ☁️ Modal CLI Notes
 ---
-### 001 -- Volume 相关
-> **列出当前账户下所有的 Modal volume**
+
+<br>
+
+# ☁️ Modal CLI Notes
+
+> 常用 Modal CLI 命令速查（目前聚焦 Volume 相关）。
+
+## 001 · Volume 相关
+
+### 📋 查看
+
+**列出当前账户下所有的 Modal volume**
+
 ```bash
 modal volume list
 ```
 
-> **列出某个 volume 内部的文件和目录，不指定 PATH 就从根目录列起**
+**列出某个 volume 内部的文件和目录**，不指定 `PATH` 就从根目录列起：
+
 ```bash
 modal volume ls <volume-name>
 # modal volume ls alophafold3-data
@@ -341,7 +412,10 @@ modal volume ls <VOLUME_NAME> [PATH]
 # modal volume ls alophafold3-data /databases
 ```
 
-> **创建或删除一个 volume**
+### 🛠️ 创建 / 删除
+
+**创建或删除一个 volume**
+
 ```bash
 modal volume create <volume-name>
 # modal volume create lamarck-data
@@ -350,38 +424,50 @@ modal volume delete <volume-name>
 # modal volume delete lamarck-data
 ```
 
-> **上传本地文件到 volume**
+### 📤 上传 / 下载
+
+**上传本地文件到 volume**
+
 ```bash
 modal volume put <VOLUME_NAME> <LOCAL_PATH> <REMOTE_PATH>
-# modal volume put lamarck-data /data/lmk/hello.txt /hello.txt - 上传到根目录
-# modal volume put lamarck-data /data/lmk/hello.txt /uploads/hello.txt - 上传到指定文件夹下
+# modal volume put lamarck-data /data/lmk/hello.txt /hello.txt             - 上传到根目录
+# modal volume put lamarck-data /data/lmk/hello.txt /uploads/hello.txt     - 上传到指定文件夹下
 ```
 
-> **从 volume 下载文件到本地**
+**从 volume 下载文件到本地**
+
 ```bash
 modal volume get <VOLUME_NAME> <REMOTE_PATH> <LOCAL_PATH>
 # modal volume get lamarck-data /hello.txt /data/lmk/miao.txt
 ```
 
-> **在 volume 中复制文件**
+### 📁 文件操作
+
+**在 volume 中复制文件**
+
 ```bash
 modal volume cp <VOLUME_NAME> <SRC> <DST>
-#  modal volume cp lamarck-data /rr.xlsx /uploads/rr.xlsx
+# modal volume cp lamarck-data /rr.xlsx /uploads/rr.xlsx
 ```
 
-> **在 volume 中删除文件**
+**在 volume 中删除文件**
+
 ```bash
 modal volume rm <VOLUME_NAME> <REMOTE_PATH>
 # modal volume rm lamarck-data /uploads/rr.xlsx
 ```
 
-> **给一个 volume 重命名**
+**给一个 volume 重命名**
+
 ```bash
 modal volume rename <OLD_NAME> <NEW_NAME>
 # modal volume rename lamarck-data kcramal-data
 ```
 
-> **在浏览器打开这个 volume 的 Modal 控制台页面**
+### 🌐 控制台
+
+**在浏览器打开这个 volume 的 Modal 控制台页面**
+
 ```bash
 modal volume dashboard <VOLUME_NAME>
 # modal volume dashboard lamarck-data
