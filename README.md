@@ -17,7 +17,7 @@
   <a href="#modal-cli-notes"><img src="https://img.shields.io/badge/-%E2%96%B6_CLI_Notes-0D1117?style=for-the-badge&logoColor=58A6FF&labelColor=161B22" alt="CLI Notes"></a>
 </p>
 
-<h2></h2>
+---
 <a id="modal-concept-notes"></a>
 #  ☁️ Modal Core Notes
 
