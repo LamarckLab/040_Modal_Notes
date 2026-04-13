@@ -11,65 +11,33 @@
   <img src="https://img.shields.io/badge/Status-In_Progress-yellow?style=flat-square" />
 </p>
 
+
 <p align="center">
+  <a href="#basics-notes"><img src="https://img.shields.io/badge/-%E2%96%B6_Basics_Notes-0D1117?style=for-the-badge&logoColor=58A6FF&labelColor=161B22" alt="Basics Notes"></a>
+  &nbsp;&nbsp;
   <a href="#concept-notes"><img src="https://img.shields.io/badge/-%E2%96%B6_Concept_Notes-0D1117?style=for-the-badge&logoColor=58A6FF&labelColor=161B22" alt="Concept Notes"></a>
   &nbsp;&nbsp;
   <a href="#cli-notes"><img src="https://img.shields.io/badge/-%E2%96%B6_CLI_Notes-0D1117?style=for-the-badge&logoColor=58A6FF&labelColor=161B22" alt="CLI Notes"></a>
 </p>
 
----
-<a id="concept-notes"></a>
-#  ☁️ Concept Notes
 
-### 001 -- Modal 介绍
+---
+<a id="basics-notes"></a>
+# 🥕 Basics Notes
+
+### 01 -- Modal 介绍
 ```text
 Modal 是一个无服务器云计算平台，允许用 Python 定义远程函数并调用云端 GPU/CPU 资源，无需管理服务器与环境。通过 Image 声明依赖，实现代码级调度，适合 AI 与高性能计算任务。
 ```
 
-### 002 -- 官方的 Hello World 
+### 02 -- 官方的 Hello World 
 <img src="images/pic1.png" alt="pic1" width="900">
 
 ```text
 通过在终端运行 modal run xxx.py 来提交任务
 ```
 
-### 003 -- Modal 的 App 类
-```text
-App 实例是 Modal 的"顶层组织单元"，用于注册、组织远程函数及其依赖资源，并作为任务提交到云端执行的入口
-```
-
-### 004 -- Modal 的 image 容器
-```text
-Modal image 是供远程函数运行的容器环境，这个远程环境里包括：
-- 操作系统基础层
-- Python 解释器
-- Python 包
-- 环境变量
-- ...
-```
-
-### 005 -- Modal 的两个常用装饰器
-```text
-- @app.function - 定义云端执行函数 & 分配计算资源
-- @app.local_entrypoint - 定义本地入口函数
-```
-
-### 006 -- Modal 的执行链路
-```bash
-App
- ├── Function (@app.function)
- │     └── 运行在远程容器（image）
- ├── Image（运行环境）
- ├── Volume / Secret / Queue（资源）
- └── Entrypoint（本地入口）
-```
-
-### 007 -- .remote( )方法
-```text
-.remote() 用于将函数调用并提交到云端执行
-```
-
-### 008 -- Modal 提供的 GPU 类型
+### 03 -- Modal 提供的 GPU 类型
 | GPU 型号                            | 显存 (VRAM)              | 价格      |
 | :---------------------------------- | :----------------------- | :-------- |
 | T4                                  | 16 GB                    | $0.59 / h |
@@ -83,7 +51,53 @@ App
 | H200                                | 141 GB                   | $4.54 / h |
 | B200 / B200+                        | 192 GB（Blackwell 架构） | $6.25 / h |
 
-### 009 -- 指定远程函数的 GPU 类型和数量
+### 04 -- Modal 的计费逻辑
+一个 Function 在部署后作为一个独立单元运行，如果没有实时输入传入该 Function，则不会运行任何默认容器，即使它所属的 App 已经部署，你的账户也不会因此被收取计算资源费用。
+
+### 05 -- image 的缓存与重建
+> Modal 根据 image 定义决定是否重建；若未变化则直接使用缓存。image 按层缓存（每个方法调用一层），某一层变动会导致其后的层全部重建，因此应将稳定步骤放前、易变步骤放后以提升构建效率。若需强制重建，可在构建方法中设置 force_build=True。
+
+```python
+image = (
+    modal.Image.debian_slim()
+    .apt_install("git")
+    .pip_install("slack-sdk", force_build=True)
+    .run_commands("echo hi")
+)
+```
+
+---
+
+<a id="concept-notes"></a>
+#  🥕 Concept Notes
+
+### 01 -- Modal 的 App 类
+```text
+App 实例是 Modal 的"顶层组织单元"，用于注册、组织远程函数及其依赖资源，并作为任务提交到云端执行的入口
+```
+
+### 02 -- Modal 的 image 容器
+```text
+Modal image 是供远程函数运行的容器环境，这个远程环境里包括：
+- 操作系统基础层
+- Python 解释器
+- Python 包
+- 环境变量
+- ...
+```
+
+### 03 -- Modal 的两个常用装饰器
+```text
+- @app.function - 定义云端执行函数 & 分配计算资源
+- @app.local_entrypoint - 定义本地入口函数
+```
+
+### 04 -- .remote( )方法
+```text
+.remote() 用于将函数调用并提交到云端执行
+```
+
+### 05 -- 指定远程函数的 GPU 类型和数量
 1. 指定 GPU 类型
 ```python
 @app.function(gpu="B200") # 使用 1 张 B200
@@ -102,9 +116,8 @@ def run_llama_405b_fp8():
 def run_on_80gb():
     ...
 ```
-#### [Modal GPU Doc](https://modal.com/docs/guide/gpu)
 
-### 010 -- Modal image 的定义
+### 06 -- Modal image 的定义
 >**在 Modal 中定义 image 的典型流程是：从一个基础镜像 (base Image) 开始，通过方法链 (method chaining) 逐步构建，可以为每一个函数单独定义不同的运行环境**
 ```python
 image = (
@@ -115,9 +128,8 @@ image = (
     .run_commands("git clone https://github.com/modal-labs/agi && echo 'ready to go!'") # 构建这个 image 时，运行这条 shell 命令
 )
 ```
-#### [直接使用已有镜像，比如从DockerFile导入](https://modal.com/docs/guide/existing-images)
 
-### 011 -- 在 image 中添加 Python 包
+### 07 -- 在 image 中添加 Python 包
 > **可以通过将所需的所有包传给 image.uv_pip_install 方法，将 Python 包添加到环境中**
 
 > **建议严格固定依赖版本，比如"pandas==2.2.0"、"torch<3"，以提高构建的可复现性**
@@ -144,7 +156,7 @@ datascience_image = (
 )
 ```
 
-### 012 -- 把本地文件传递到 image 中
+### 08 -- 把本地文件传递到 image 中
 > **有时容器需要一些无法从互联网获取的依赖，可以使用 image.add_local_dir 和 image.add_local_file 方法，将本地系统中的文件传递到容器中**
 >
 
@@ -152,7 +164,7 @@ datascience_image = (
 image = modal.Image.debian_slim().add_local_dir("/user/erikbern/.aws", remote_path="/root/.aws")
 ```
 
-### 013 -- 导入包写在函数内部
+### 09 -- 导入包写在函数内部
 > **若本地未安装某包（如 pandas），不要在脚本顶部全局 import，否则会报 ImportError；应将 import 写在函数内部，使其仅在远程容器运行时加载（容器中已安装该包）**
 
 ```python
@@ -184,21 +196,21 @@ def my_function():
     ...
 ```
 
-### 014 -- 在 image 中安装系统包
+### 10 -- 在 image 中安装系统包
 > 使用 Image.apt_install 来安装 Linux 系统包
 
 ```python
 image = modal.Image.debian_slim().apt_install("git", "curl")
 ```
 
-### 015 -- 设置 image 中的环境变量
+### 11 -- 设置 image 中的环境变量
 > 向 image.env 传入一个字典，来修改代码可见的环境变量
 
 ```python
 image = modal.Image.debian_slim().env({"PORT": "6443"})
 ```
 
-### 016 -- 构建 image 时运行 shell 命令
+### 12 -- 构建 image 时运行 shell 命令
 > 通过 Image.run_commands 在构建 image 时执行 shell 命令
 
 ```python
@@ -211,7 +223,7 @@ image_with_repo = (
 )
 ```
 
-### 017 -- 构建 image 时提前运行一段 Python 代码
+### 13 -- 构建 image 时提前运行一段 Python 代码
 > 此处举一个例子：把 Hugging Face 上的模型下载到容器缓存里
 
 > 本质上，这相当于运行一个 Modal Function，并将执行后的文件系统状态快照为一个新的 image
@@ -240,7 +252,7 @@ image = (
 )
 ```
 
-### 018 -- 在 image 构建阶段，附加 GPU
+### 14 -- 在 image 构建阶段，附加 GPU
 > 如果在构建 image 的某一步需要在带 GPU 的实例上运行（例如某些包在安装时检测 GPU 以设置编译参数），可以在定义该步骤时指定所需的 GPU 类型
 
 ```python
@@ -250,19 +262,7 @@ image = (
 )
 ```
 
-### 019 -- image 的缓存与重建
-> Modal 根据 image 定义决定是否重建；若未变化则直接使用缓存。image 按层缓存（每个方法调用一层），某一层变动会导致其后的层全部重建，因此应将稳定步骤放前、易变步骤放后以提升构建效率。若需强制重建，可在构建方法中设置 force_build=True。
-
-```python
-image = (
-    modal.Image.debian_slim()
-    .apt_install("git")
-    .pip_install("slack-sdk", force_build=True)
-    .run_commands("echo hi")
-)
-```
-
-### 020 -- 使用 .from_registry 从公共镜像仓库加载镜像
+### 15 -- 使用 .from_registry 从公共镜像仓库加载镜像
 > from_registry 方法可以从所有公共镜像仓库加载镜像，例如：
 - Nvidia - nvcr.io
 - AWS - ECR
@@ -283,7 +283,7 @@ def fit_knn():
 data_science_image = sklearn_image.uv_pip_install("polars", "datasette")
 ```
 
-### 021 -- 使用 .from_dockerfile 自定义镜像
+### 16 -- 使用 .from_dockerfile 自定义镜像
 > 可以通过将 Dockerfile 的路径传递给 Image.from_dockerfile，从已有的 Dockerfile 定义一个 Image
 ```python
 dockerfile_image = modal.Image.from_dockerfile("Dockerfile")
@@ -295,7 +295,7 @@ def fit():
     ...
 ```
 
-### 022 -- 配置 CPU、内存和硬盘
+### 17 -- 配置 CPU、内存和硬盘
 每个 Modal Function 或 Sandbox 容器默认请求 0.125 个 CPU 核心 和 128 MiB 内存，如果 worker 节点有可用的 CPU 或内存，容器可以超过这个最小值运行，但更好的做法是通过请求更大的资源值来保证获得更多资源
 
 > 如果代码需要运行在更多 CPU 核心上，可以通过 cpu 参数进行指定 (浮点数形式)
@@ -339,15 +339,13 @@ def f():
     ...
 ```
 
-### 023 -- Modal 的计费逻辑
-一个 Function 在部署后作为一个独立单元运行，如果没有实时输入传入该 Function，则不会运行任何默认容器，即使它所属的 App 已经部署，你的账户也不会因此被收取计算资源费用。
-
+---
 
 <a id="cli-notes"></a>
-#  ☁️ CLI Notes
+#  🥕 CLI Notes
 
 ---
-### 001 -- Volume 相关
+### 01 -- Volume CLI
 > **列出当前账户下所有的 Modal volume**
 ```bash
 modal volume list
