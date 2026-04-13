@@ -1,21 +1,18 @@
-<h2 align="center">☁️ Modal 云计算平台学习笔记</h1>
+<h2 align="center">☁️ Modal 云计算平台学习笔记</h2>
 <p align="center">
   <i> —— 2026.04.01</i>
 </p>
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Modal-7FEE64?style=flat-square" />
-<img src="https://img.shields.io/badge/Language-Python-3776AB?style=flat-square&logo=python&logoColor=white" />
-<img src="https://img.shields.io/badge/Runtime-Serverless-FF6B35?style=flat-square" />
-<img src="https://img.shields.io/badge/Status-In_Progress-yellow?style=flat-square" />
+  <img src="https://img.shields.io/badge/Language-Python-3776AB?style=flat-square&logo=python&logoColor=white" />
+  <img src="https://img.shields.io/badge/Runtime-Serverless-FF6B35?style=flat-square" />
+  <img src="https://img.shields.io/badge/Status-In_Progress-yellow?style=flat-square" />
 </p>
 
 <p align="center">
-  <a href="#modal-concept-notes">
-    <img src="https://img.shields.io/badge/-%E2%96%B6_concept_Notes-0D1117?style=for-the-badge&logoColor=58A6FF&labelColor=161B22" alt="Modal CLI Notes">
-  </a>
-  <a href="#modal-cli-notes">
-    <img src="https://img.shields.io/badge/-%E2%96%B6_CLI_Notes-0D1117?style=for-the-badge&logoColor=58A6FF&labelColor=161B22" alt="Modal CLI Notes">
-  </a>
+  <a href="#modal-concept-notes"><img src="https://img.shields.io/badge/-%E2%96%B6_Concept_Notes-0D1117?style=for-the-badge&logoColor=58A6FF&labelColor=161B22" alt="Concept Notes"></a>
+  &nbsp;&nbsp;
+  <a href="#modal-cli-notes"><img src="https://img.shields.io/badge/-%E2%96%B6_CLI_Notes-0D1117?style=for-the-badge&logoColor=58A6FF&labelColor=161B22" alt="CLI Notes"></a>
 </p>
 
 <a id="modal-concept-notes"></a>
