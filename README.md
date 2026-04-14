@@ -73,7 +73,7 @@ image = (
 
 ### 01 -- Modal 的 App 类
 ```text
-App 实例是 Modal 的"顶层组织单元"，用于注册、组织远程函数及其依赖资源，并作为任务提交到云端执行的入口
+modal.App 是 Modal里一切资源的顶层容器：函数、镜像、Volume、Secret 都要挂在某个 App 上
 ```
 
 ### 02 -- Modal 的 image 容器
@@ -388,10 +388,12 @@ modal volume cp <VOLUME_NAME> <SRC> <DST>
 #  modal volume cp lamarck-data /rr.xlsx /uploads/rr.xlsx
 ```
 
-> **在 volume 中删除文件**
+> **在 volume 中删除文件与文件夹**
 ```bash
 modal volume rm <VOLUME_NAME> <REMOTE_PATH>
 # modal volume rm lamarck-data /uploads/rr.xlsx
+modal volume rm <VOLUME_NAME> <REMOTE_PATH> -r
+# modal volume rm alphafold3-msa-cache 8820b4872cd382ba -r
 ```
 
 > **给一个 volume 重命名**
