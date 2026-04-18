@@ -117,6 +117,7 @@ def run_data_pipeline(fasta_json: str, job_name: str) -> str:
     import subprocess
     import pathlib
     import shutil
+    import os
 
     cache_subdir = cache_dir_name(job_name)
     cache_file = cache_file_name(job_name)
@@ -159,9 +160,22 @@ def run_data_pipeline(fasta_json: str, job_name: str) -> str:
     source = data_jsons[0]
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source, target_file)
-    shutil.rmtree(tmp_out, ignore_errors=True)
+    # 分块写入 + fsync 强制刷盘, 避免 shutil.copy2 在 Modal volume FUSE 挂载上
+    # 因 sparse-write / page cache 未回写导致的文件损坏
+    with open(source, "rb") as src_f, open(target_file, "wb") as dst_f:
+        shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
+        dst_f.flush()
+        os.fsync(dst_f.fileno())
 
+    src_size = source.stat().st_size
+    dst_size = target_file.stat().st_size
+    if src_size != dst_size:
+        raise RuntimeError(
+            f"MSA cache write size mismatch for {job_name}: "
+            f"src={src_size} dst={dst_size}"
+        )
+
+    shutil.rmtree(tmp_out, ignore_errors=True)
     msa_cache_volume.commit()
     print(f"[done] MSA cached at {target_file}")
     return job_name
