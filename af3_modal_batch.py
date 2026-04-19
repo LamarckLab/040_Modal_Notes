@@ -1,3 +1,4 @@
+import os
 import pathlib
 import modal
 
@@ -297,25 +298,61 @@ def run_inference_no_msa(job_name: str, raw_json: str) -> str:
 # 本地辅助: volume ↔ 本地 文件传输
 # ============================================================
 def download_from_volume(volume: modal.Volume, remote_prefix: str, local_dir: pathlib.Path) -> int:
-    """把 volume 下 remote_prefix 目录递归下载到 local_dir"""
+    """把 volume 下 remote_prefix 目录递归下载到 local_dir
+
+    - 每个文件先写到 .part, 完整且大小匹配后再 rename 到正式名
+    - 单文件失败不影响其他文件, 打日志继续
+    - 写入后 fsync, 避免 OS 级缓存未刷盘
+    - 返回成功下载的文件数
+    """
     local_dir.mkdir(parents=True, exist_ok=True)
     prefix = remote_prefix.rstrip("/")
     try:
         entries = list(volume.iterdir(f"{prefix}/", recursive=True))
     except (FileNotFoundError, modal.exception.NotFoundError):
         return 0
-    count = 0
+
+    success = 0
+    failed = []
     for entry in entries:
         if entry.type != modal.volume.FileEntryType.FILE:
             continue
         rel_path = pathlib.Path(entry.path).relative_to(prefix)
         local_path = local_dir / rel_path
+        tmp_path = local_path.with_name(local_path.name + ".part")
         local_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(local_path, "wb") as f:
-            for chunk in volume.read_file(entry.path):
-                f.write(chunk)
-        count += 1
-    return count
+        expected_size = getattr(entry, "size", None)
+
+        try:
+            with open(tmp_path, "wb") as f:
+                for chunk in volume.read_file(entry.path):
+                    f.write(chunk)
+                f.flush()
+                os.fsync(f.fileno())
+
+            actual_size = tmp_path.stat().st_size
+            if expected_size is not None and actual_size != expected_size:
+                raise IOError(
+                    f"size mismatch: expected={expected_size} got={actual_size}"
+                )
+
+            tmp_path.replace(local_path)
+            success += 1
+            size_info = f"{actual_size} bytes"
+            print(f"    [OK]   {entry.path} ({size_info})")
+
+        except Exception as e:
+            failed.append((entry.path, repr(e)))
+            print(f"    [FAIL] {entry.path}: {e}")
+            if tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+
+    if failed:
+        print(f"  [WARN] {len(failed)} file(s) failed under prefix '{prefix}'")
+    return success
 
 
 def upload_dir_to_volume(volume: modal.Volume, local_dir: pathlib.Path, remote_prefix: str) -> int:
@@ -583,11 +620,13 @@ def only_inference(skip_existing: bool = True):
         print(f"No valid cache folders in {MSA_DIR}")
         return
 
-    # 过滤已有本地结果的
+    # 过滤已有本地结果的 (以存在非空 {job}_model.cif 为完成标志, 0 字节或缺失都视为未完成)
     jobs = []
     for job_name, cache_folder in cache_folders:
-        if skip_existing and (MSA_OUTPUT_DIR / job_name).exists() and any((MSA_OUTPUT_DIR / job_name).iterdir()):
-            print(f"[skip] {job_name} already has local results")
+        job_dir = MSA_OUTPUT_DIR / job_name
+        marker_files = list(job_dir.rglob(f"{job_name}_model.cif")) if job_dir.exists() else []
+        if skip_existing and any(m.stat().st_size > 0 for m in marker_files):
+            print(f"[skip] {job_name} already has complete local results")
             continue
         jobs.append((job_name, cache_folder))
 
