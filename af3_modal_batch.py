@@ -422,10 +422,13 @@ def main(skip_existing: bool = True):
         raise FileNotFoundError(f"No .json files found in {INPUT_DIR}")
 
     jobs = []
+    # 以存在非空 {job}_model.cif 为完成标志, 0 字节或缺失都视为未完成
     for jf in json_files:
         job_name = jf.stem
-        if skip_existing and (MSA_OUTPUT_DIR / job_name).exists() and any((MSA_OUTPUT_DIR / job_name).iterdir()):
-            print(f"[skip] {job_name} already has local results")
+        job_dir = MSA_OUTPUT_DIR / job_name
+        marker_files = list(job_dir.rglob(f"{job_name}_model.cif")) if job_dir.exists() else []
+        if skip_existing and any(m.stat().st_size > 0 for m in marker_files):
+            print(f"[skip] {job_name} already has complete local results")
             continue
         jobs.append((job_name, jf.read_text(encoding="utf-8")))
 
@@ -708,11 +711,14 @@ def only_inference_no_msa(skip_existing: bool = True):
 
     NO_MSA_DIR.mkdir(parents=True, exist_ok=True)
 
+    # 以存在非空 {job}_model.cif 为完成标志, 0 字节或缺失都视为未完成
     jobs = []
     for jf in json_files:
         job_name = jf.stem
-        if skip_existing and (NO_MSA_OUTPUT_DIR / job_name).exists() and any((NO_MSA_OUTPUT_DIR / job_name).iterdir()):
-            print(f"[skip] {job_name} already has local results")
+        job_dir = NO_MSA_OUTPUT_DIR / job_name
+        marker_files = list(job_dir.rglob(f"{job_name}_model.cif")) if job_dir.exists() else []
+        if skip_existing and any(m.stat().st_size > 0 for m in marker_files):
+            print(f"[skip] {job_name} already has complete local results")
             continue
         raw = jf.read_text(encoding="utf-8")
         transformed = transform_to_msa_free(raw)
