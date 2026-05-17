@@ -79,7 +79,7 @@ results_volume = modal.Volume.from_name(
 def run_chai_inference(job_name: str, fasta_text: str) -> str:
     import pathlib
     import shutil
-    from chai_lab.chai1 import run_inference
+    from chai_lab.chai1 import run_inference  # type: ignore
 
     # 输入 FASTA 写到容器临时目录
     input_dir = pathlib.Path("/tmp/chai_input")
